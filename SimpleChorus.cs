@@ -1,12 +1,10 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 //This is a very, very simple chorus/delay/flanger/fx. 
 //It's designed to help understand how to write a simple effect with OnAudioFilterRead.
 //It's MONO - it can be easily upgraded to stereo, but I kept it simple to minimise plumbing/cruft.
-//example audio is from:
-//https://freesound.org/people/Paul%20Evans/sounds/256999/
 public class SimpleChorus : MonoBehaviour {
 
     [Range(0.0f, 1.0f)] 
@@ -68,19 +66,22 @@ public class SimpleChorus : MonoBehaviour {
         {
             float lfo = (Mathf.Sin(sine_phase * 2.0f * Mathf.PI) * 0.5f + 1.0f); //this is a sine wave that goes from 0.0 to 1.0
             lfo = lfo * delay_samples * amount; //now the sine wave is going from 0.0 to the delay time * the amount of wobble we want
+            
             //this means we can be reading as far back as a second, and moving the read head all the way up to the write head, when amount is max
             float read_pos = ((float)write_head - delay_samples) + lfo; //our read position - write head - delay, and then we oscillate that forward by the LFO
     
-            //now for the linear interpolation - we need the sample index before and after the fractional read head position
+            //this read position is a float, which means it can be in between actual sample indices...
+            //we can "read" at these fractional positions using linear interpolation. Here's how it works 
+            //we need the sample index before and after the fractional read head position
             float read_pos_1 = Mathf.Floor(read_pos);
             float read_pos_2 = Mathf.Ceil(read_pos);
-            float lerp_t = read_pos - read_pos_1; //and this is how far between the lower and upper sample indices we are trying to read
+            float lerp_t = read_pos - read_pos_1; //and this is how far between the lower and upper sample indices we are trying to read. Or you can use frac or something like that.
     
             //because we are oscillating the read head, it can easily be pushed outside the buffer's bounds
             //but we can wrap it into the buffer's bounds with a tiny function.
             //because the buffer we've implemented is a "ring buffer", we are storing a history of audio data
             //which wraps around the buffer - for example, we could be reading at writing at sample 100 and reading
-            //500 samples into the past, which is closer to the end of the buffer at 44000! That's fine!
+            //500 samples into the past, which is closer to the end of the buffer once wrapped! That's fine!
             read_pos_1 = wrap(read_pos_1, max_delay);
             read_pos_2 = wrap(read_pos_2, max_delay);
     
@@ -116,6 +117,8 @@ public class SimpleChorus : MonoBehaviour {
             write_head = (write_head + 1) % max_delay; 
             //update the phase for the sine wave that we use for the LFO.
             sine_phase += rate/sampleRate;
+            //of course we can't let sine phase grow infinitely... it will just lose precision and wrap around eventuall, so let's just wrap it ourselves
+            sine_phase = sine_phase % 1.0f;
         }
     }
 }
