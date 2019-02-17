@@ -5,12 +5,16 @@ using UnityEngine;
 //This is a very, very simple chorus/delay/flanger/fx. 
 //It's designed to help understand how to write a simple effect with OnAudioFilterRead.
 //It's MONO - it can be easily upgraded to stereo, but I kept it simple to minimise plumbing/cruft.
+//example audio is from:
+//https://freesound.org/people/Paul%20Evans/sounds/256999/
 public class SimpleChorus : MonoBehaviour {
 
-    [Range(0.0f, 1.0f)] 
-    public float delay_secs = 0.016f; //from 0.0 to 1.0f in seconds. You want a TINY value here for chorus.
+    [Range(0.001f, 1.0f)] 
+    public float delay_secs = 0.016f; //from 0.001 to 1.0f in seconds. You want a TINY value here for chorus.
     [Range(0.0f, 1.0f)]
     public float feedback = 0.0f; //from 0.0 to 1.0
+    [Range(0.0f, 1.0f)]
+    public float drymix = 1.0f; //from 0.0 to 1.0
     [Range(0.0f, 1.0f)]
     public float wetmix = 0.8f; //from 0.0 to 1.0
     [Range(0.0f,1.0f)]
@@ -42,6 +46,7 @@ public class SimpleChorus : MonoBehaviour {
     }
     
     // Useful function to wrap the read/write positions around into the buffer.
+    //I have a feeling Mathf.Repeat already does this.
     float wrap(float a, float b)
     {
         return (a % b + b) % b;
@@ -64,7 +69,7 @@ public class SimpleChorus : MonoBehaviour {
         //go through the input/output data
         for(int n = 0; n<dataLen; n++)
         {
-            float lfo = (Mathf.Sin(sine_phase * 2.0f * Mathf.PI) * 0.5f + 1.0f); //this is a sine wave that goes from 0.0 to 1.0
+            float lfo = (Mathf.Sin(sine_phase * 2.0f * Mathf.PI) + 1.0f)*0.5f; //this is a sine wave that goes from 0.0 to 1.0
             lfo = lfo * delay_samples * amount; //now the sine wave is going from 0.0 to the delay time * the amount of wobble we want
             
             //this means we can be reading as far back as a second, and moving the read head all the way up to the write head, when amount is max
@@ -80,7 +85,7 @@ public class SimpleChorus : MonoBehaviour {
             //because we are oscillating the read head, it can easily be pushed outside the buffer's bounds
             //but we can wrap it into the buffer's bounds with a tiny function.
             //because the buffer we've implemented is a "ring buffer", we are storing a history of audio data
-            //which wraps around the buffer - for example, we could be reading at writing at sample 100 and reading
+            //which wraps around the buffer - for example, we could be reading at sample 100 and reading
             //500 samples into the past, which is closer to the end of the buffer once wrapped! That's fine!
             read_pos_1 = wrap(read_pos_1, max_delay);
             read_pos_2 = wrap(read_pos_2, max_delay);
@@ -100,7 +105,7 @@ public class SimpleChorus : MonoBehaviour {
                 mix_into_buffer += data[n * channels + c];
     
                 //now write the output audio (per channnel). It's the input audio + what we READ from the buffer at the delayed read head
-                data[n * channels + c] += read_from_buffer*wetmix; //here we can apply the wet mix, i.e. how much of the delayed signal do we want
+                data[n * channels + c] = data[n * channels + c]*drymix + read_from_buffer*wetmix; //here we can apply the wet mix, i.e. how much of the delayed signal do we want
             }
     
             //because we mixed together a signal from multiple channels into one buffer, we should probably
